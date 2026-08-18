@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof-Carrying Audit Warrants</title>
+<meta name="description" content="A request for criticism of Proof-Carrying Audit Warrants v0.1.0: three findings from reading BenchRisk source rows before formalising them, one executable case, and five questions.">
+<meta name="color-scheme" content="light dark">
+<style>
+:root {
+  --bg:          #FBFBFA;
+  --surface:     #F2F3F2;
+  --surface-2:   #EAECEC;
+  --ink:         #16181A;
+  --ink-2:       #5A6066;
+  --ink-3:       #838B90;
+  --rule:        #DFE2E2;
+  --rule-strong: #C4CACB;
+  --accent:      #1F4E5F;
+  --accent-ink:  #FBFBFA;
+
+  --serif: ui-serif, Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype",
+           Palatino, Cambria, Georgia, serif;
+  --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+           "Liberation Mono", "DejaVu Sans Mono", monospace;
+
+  --measure: 64ch;
+  --s1: 0.4rem; --s2: 0.75rem; --s3: 1.15rem; --s4: 1.8rem;
+  --s5: 2.75rem; --s6: 4rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:          #101314;
+    --surface:     #171B1D;
+    --surface-2:   #1E2325;
+    --ink:         #E6E9EA;
+    --ink-2:       #9AA2A6;
+    --ink-3:       #767E82;
+    --rule:        #262C2E;
+    --rule-strong: #394144;
+    --accent:      #7FBECD;
+    --accent-ink:  #101314;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:          #101314;
+  --surface:     #171B1D;
+  --surface-2:   #1E2325;
+  --ink:         #E6E9EA;
+  --ink-2:       #9AA2A6;
+  --ink-3:       #767E82;
+  --rule:        #262C2E;
+  --rule-strong: #394144;
+  --accent:      #7FBECD;
+  --accent-ink:  #101314;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--s6) var(--s3) var(--s6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* ---------- masthead ---------- */
+
+.masthead { display: flex; flex-direction: column; gap: var(--s3); }
+
+.tagline {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2rem, 6vw, 2.9rem);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.021em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+.standfirst {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+.meta .ver {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- sections ---------- */
+
+section { display: flex; flex-direction: column; gap: var(--s3); }
+
+h2 {
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.014em;
+  text-wrap: balance;
+  margin: 0;
+  padding-top: var(--s3);
+  border-top: 2px solid var(--ink);
+}
+
+h3 {
+  font-size: 1.02rem;
+  font-weight: 700;
+  margin: 0;
+  text-wrap: balance;
+}
+
+p { margin: 0; text-wrap: pretty; }
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+a:focus-visible, .q:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--surface-2);
+  padding: 0.1em 0.34em;
+  border-radius: 2px;
+}
+
+ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: var(--s2); }
+li { padding-left: 0.15rem; }
+li::marker { color: var(--ink-3); }
+
+.lede { font-size: 1.08rem; }
+
+/* ---------- self-audit list ---------- */
+
+.audit {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--rule);
+}
+.audit li {
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: var(--s2);
+  align-items: baseline;
+}
+.audit .mark {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- verdict table ---------- */
+
+.verdicts {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+.verdicts th, .verdicts td {
+  text-align: left;
+  vertical-align: baseline;
+  padding: var(--s2) var(--s2) var(--s2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.verdicts th {
+  width: 11.5rem;
+  font-family: var(--mono);
+  font-size: 0.775rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.verdicts tr:first-child th, .verdicts tr:first-child td { border-top: 1px solid var(--rule); }
+.verdicts td { color: var(--ink-2); }
+.tablewrap { overflow-x: auto; }
+
+/* ---------- the three findings: the one bold moment ---------- */
+
+.findings { display: flex; flex-direction: column; gap: var(--s4); }
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-left: var(--s3);
+  border-left: 2px solid var(--rule-strong);
+}
+
+.relation {
+  font-family: var(--mono);
+  font-size: clamp(0.9rem, 2.6vw, 1.06rem);
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.6em;
+  margin: 0;
+  padding: var(--s2) 0 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+}
+.relation .ne {
+  color: var(--accent);
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.src {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.caveat {
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--ink-2);
+  padding: var(--s3);
+  background: var(--surface);
+  border-radius: 3px;
+  margin: 0;
+}
+
+/* ---------- terminal ---------- */
+
+.term {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow-x: auto;
+}
+.term .cmd {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  white-space: pre;
+}
+.term .cmd .sig { color: var(--ink-3); }
+.term pre {
+  margin: 0;
+  padding: var(--s3);
+  font-family: var(--mono);
+  font-size: 0.775rem;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre;
+}
+.term .v { font-weight: 600; letter-spacing: 0.05em; }
+.term .dim { color: var(--ink-2); }
+
+/* ---------- questions ---------- */
+
+.questions { display: flex; flex-direction: column; gap: 0; }
+.q {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+.q:first-child { border-top: 1px solid var(--rule); }
+.q .n {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.q .body { display: flex; flex-direction: column; gap: var(--s2); }
+
+.object {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.75;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: var(--s3);
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--ink-2);
+}
+
+/* ---------- colophon ---------- */
+
+.colophon {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+@media (max-width: 34rem) {
+  .page { padding: var(--s5) var(--s3); gap: var(--s4); }
+  .verdicts th { width: auto; }
+  .verdicts, .verdicts tbody, .verdicts tr, .verdicts th, .verdicts td { display: block; }
+  .verdicts th { border-bottom: none; padding-bottom: 0; }
+  .verdicts tr:first-child td { border-top: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ---------- evidence bar ---------- */
+
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.evidence b {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+}
+.evidence a { color: var(--accent); text-decoration-thickness: 1px; }
+.evidence .sep { color: var(--rule-strong); }
+
+/* ---------- sign-off ---------- */
+
+.signoff { display: flex; flex-direction: column; gap: var(--s2); }
+.signoff .ask {
+  font-size: 1.08rem;
+  font-weight: 700;
+  text-wrap: pretty;
+  margin: 0;
+}
+.signoff .who {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  margin: 0;
+  line-height: 1.8;
+}
+.signoff .who a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <p class="tagline">Request for criticism</p>
+    <h1>Proof-Carrying Audit Warrants</h1>
+    <p class="standfirst">A small demonstrator for making the warrant of an audit claim independently checkable — deliberately finished rather than extended. I am looking for people to tell me the distinctions it enforces are wrong, already handled, or not worth the overhead.</p>
+    <div class="meta">
+      <span class="ver">v0.1.0</span>
+      <span>Five minutes</span>
+      <span>Five questions at the end</span>
+    </div>
+  </header>
+
+  <div class="evidence">
+    <span><b>Executable evidence</b></span>
+    <span><a href="https://github.com/dhwcmoore/proof-carrying-audit-warrants">proof-carrying-audit-warrants</a></span>
+    <span class="sep">&middot;</span>
+    <span><b>Release</b> <a href="https://github.com/dhwcmoore/proof-carrying-audit-warrants/releases/tag/v0.1.0">v0.1.0</a></span>
+    <span class="sep">&middot;</span>
+    <span><b>C1&ndash;C20</b> complete</span>
+    <span class="sep">&middot;</span>
+    <span><b>Published fixtures</b> 14/14 agreement</span>
+  </div>
+
+  <section>
+    <h2>Why I think this is worth your time</h2>
+    <p class="lede">I built a small system for making the warrant of an audit claim independently checkable. <strong>The interesting result was that the checks repeatedly caught problems in the project itself.</strong></p>
+    <ul class="audit">
+      <li><span class="mark">&mdash;</span><span>A preservation theorem I had specified turned out to be <strong>false</strong>. A warrant resting on no admitted evidence is not preserved under extension; the countermodel is in the repository.</span></li>
+      <li><span class="mark">&mdash;</span><span>Three BenchRisk source mappings each contained a distinction the planned formalisation would otherwise have missed.</span></li>
+      <li><span class="mark">&mdash;</span><span>The extraction gate caught an architectural representation that could not produce type-correct OCaml, forcing a bounded refactor.</span></li>
+      <li><span class="mark">&mdash;</span><span>The final closure review found claims in my own documentation that had ceased to be true.</span></li>
+    </ul>
+    <p>None of these failures prevented the software from running. They were found because the project required each claim to carry an inspectable warrant. That is the thesis, demonstrated on itself rather than asserted.</p>
+  </section>
+
+  <section>
+    <h2>The proposition</h2>
+    <p class="lede"><strong>A mitigation's effect and a mitigation's warrant are separate audit objects. The effect may remain unchanged while the warrant expires, is defeated, or becomes inapplicable.</strong></p>
+    <p>A risk framework can tell you what follows <em>if</em> a mitigation is present. It is a separate question what entitles you to say it <em>is</em> present, still applies, and still holds.</p>
+    <p><strong>The requirement is not mine.</strong> <em>Frontier AI Auditing</em> (arXiv:2601.11699v4) states it: audit findings &ldquo;should carry explicit assumptions and validity conditions, and should be automatically deprecated when key underlying assumptions no longer hold.&rdquo; What I have built is a mechanism for that requirement, not the requirement.</p>
+    <p>Four verdicts, which are logical categories rather than a confidence scale:</p>
+    <div class="tablewrap">
+      <table class="verdicts">
+        <tr><th>WARRANTED</th><td>admitted evidence meets the obligations, under declared conditions</td></tr>
+        <tr><th>DEFEATED</th><td>admitted evidence establishes that a required condition fails</td></tr>
+        <tr><th>UNDERDETERMINED</th><td>the evidence decides neither way</td></tr>
+        <tr><th>INADMISSIBLE</th><td>this evidence may not participate in deciding <em>this</em> claim</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>The three source findings</h2>
+    <p>Each case began by reading the complete BenchRisk registry row — every field, all sibling mitigations — before writing any proof. Three cases, three findings, none anticipated.</p>
+
+    <div class="findings">
+      <div class="finding">
+        <h3>The elicitation instrument is weaker than the measure it elicits</h3>
+        <p class="src">Mitigation 67 &middot; registry v0.5.2</p>
+        <p>The same registry row states the response measure as <em>&ldquo;Do not allow evaluation on demand&rdquo;</em> and the assessment question as <em>&ldquo;Do you restrict <strong>or</strong> avoid evaluation on demand…?&rdquo;</em> A benchmark author can answer that question honestly while operating a restricted-but-permitted regime the response measure excludes. Both strings are in one row, so this is not version drift.</p>
+        <p class="relation"><span>answer to an assessment instrument</span><span class="ne">&ne;</span><span>warrant for the mitigation statement</span></p>
+      </div>
+
+      <div class="finding">
+        <h3>A mitigation is not the negation of its failure mode</h3>
+        <p class="src">Mitigation 93 &middot; failure mode #025</p>
+        <p>M-93 asserts the evaluator is algorithmic <em>and</em> that no legitimate reason exists to embed it in the system chain. It does not assert the evaluator is absent from the chain. So M-93 can hold while FM-025 has occurred — consistent with its being scored as a <em>likelihood</em> mitigation rather than a logical exclusion.</p>
+        <p class="relation"><span>mitigation warrant</span><span class="ne">&ne;</span><span>warrant that the failure mode is absent</span></p>
+      </div>
+
+      <div class="finding">
+        <h3>Declaring a scope is not covering it</h3>
+        <p class="src">Mitigation 162 &middot; failure mode #002</p>
+        <p>M-162 requires a complete definition of what is and is not covered. BenchRisk itself separates this from achieved coverage, giving FM-002 distinct mitigations for measurement (M-68, M-190). If declaration were achievement, those would be redundant.</p>
+        <p class="relation"><span>declared coverage</span><span class="ne">&ne;</span><span>adequate coverage</span></p>
+      </div>
+    </div>
+
+    <p class="caveat">These are observations from three selected mappings, not claims that BenchRisk as a whole is defective or internally inconsistent. BenchRisk documents its own evidence boundary plainly, which is why it can be cited exactly.</p>
+  </section>
+
+  <section>
+    <h2>One executable example</h2>
+    <div class="term">
+      <div class="cmd"><span class="sig">$</span> warrant-check examples/structural-s1.json</div>
+<pre>VERDICT
+<span class="v">UNDERDETERMINED</span>
+
+CLAIM
+The evaluator applies an algorithm to a list of correct
+answers, and there is no legitimate reason to incorporate
+it into the system chain
+
+MISSING OBLIGATIONS
+  NoLegitimateReasonToEmbed
+
+INTERPRETATION
+<span class="dim">The admitted evidence decides neither way. This is not
+evidence that the claim is false. Obtain the missing
+evidence listed above, or weaken the claim.</span></pre>
+    </div>
+    <p>The evidence here says the evaluator <em>is</em> an algorithmic lookup and <em>is</em> outside the system chain. A naive checker reports <strong>pass</strong>. This one reports that one of the two propositions M-93 actually asserts has not been established, and names which — because &ldquo;no legitimate reason exists&rdquo; is a judgement no architectural fact settles.</p>
+  </section>
+
+  <section>
+    <h2>What this deliberately does not claim</h2>
+    <ul>
+      <li>It does not establish that an AI system is safe, or that supplied evidence is true.</li>
+      <li><code>WARRANTED</code> is not permanent. <code>DEFEATED</code> does not allege the earlier audit was mistaken. <code>UNDERDETERMINED</code> is not evidence the claim is false. <code>INADMISSIBLE</code> does not mean the model cannot perform the task.</li>
+      <li><strong>A change signal is not a defeat.</strong> <code>DEFEATED</code> requires admitted evidence establishing failure of a declared condition; an unexplained change belongs in <code>UNDERDETERMINED</code>.</li>
+      <li><strong>It does not establish completeness.</strong> It reasons over the ledger it is given. <code>WARRANTED</code> over a curated ledger is worth what the curation is worth.</li>
+      <li>Coq extraction, the OCaml compiler, and the JSON parser are <strong>not</strong> verified. What is established is observed agreement between the executable and the formal decisions on all 14 published fixtures. That is testing, not proof.</li>
+      <li>Retraction is out of scope: the ledger is monotone, so defeat arrives only by addition.</li>
+      <li>No affiliation with or endorsement by AVERI. No criticism of BenchRisk intended.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Five questions</h2>
+    <p>I am asking you to tell me I am wrong. Any of these being answered &ldquo;no&rdquo; is useful information.</p>
+    <div class="questions">
+      <div class="q">
+        <span class="n">01</span>
+        <div class="body">
+          <p><strong>Does your process currently distinguish <em>excluded</em> evidence from <em>insufficient</em> evidence?</strong></p>
+          <p>They direct different remediation — change the claim or the evidence source, versus go and get the missing evidence. Is that distinction preserved in your findings today, or does it collapse?</p>
+        </div>
+      </div>
+      <div class="q">
+        <span class="n">02</span>
+        <div class="body">
+          <p><strong>Is the warrant boundary drawn in the right place?</strong></p>
+          <p>The sharpest case: I treat &ldquo;no legitimate reason to embed the evaluator&rdquo; as something structural evidence can never discharge. That is my modelling decision, not BenchRisk's. Do you disagree — and if so, does the system at least make the disagreement precise enough to inspect?</p>
+        </div>
+      </div>
+      <div class="q">
+        <span class="n">03</span>
+        <div class="body">
+          <p><strong>Does the M-93 result matter operationally?</strong></p>
+          <p>A mitigation can be satisfied while the failure mode it mitigates has occurred. Is that a distinction your assessment machinery already preserves, or one it loses?</p>
+        </div>
+      </div>
+      <div class="q">
+        <span class="n">04</span>
+        <div class="body">
+          <p><strong>Is declared-versus-adequate coverage already handled where you work?</strong></p>
+          <p>Or is &ldquo;the benchmark says it covers X&rdquo; routinely read as &ldquo;the benchmark covers X&rdquo;?</p>
+        </div>
+      </div>
+      <div class="q">
+        <span class="n">05</span>
+        <div class="body">
+          <p><strong>Would carrying this object with a finding improve real audit work?</strong></p>
+<pre class="object">claim            subject           admitted evidence
+assumptions      scope             validity conditions
+defeat conditions                  current verdict
+witness / reason</pre>
+          <p>Is that more useful than a conventional conclusion whose authority conditions live in prose — or is it overhead that would not survive contact with a real engagement?</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What I am not asking</h2>
+    <p>Whether the proof assistant is impressive. The formal development exists so the decision logic can be checked independently and cheaply; it is not the contribution I am asking you to evaluate.</p>
+    <p>If the answer is that this solves no problem you have, that is a result, and I would rather have it now than after building more.</p>
+  </section>
+
+  <section class="signoff">
+    <h2>Contact</h2>
+    <p class="ask">I am looking for criticism of the warrant boundary, especially places where an experienced auditor would draw it differently.</p>
+    <p class="who">Duston Moore<br><a href="mailto:dhwcmoore@gmail.com">dhwcmoore@gmail.com</a></p>
+  </section>
+
+  <footer class="colophon">
+    <p><strong>Repository:</strong> <code>v0.1.0</code>, tagged. Coq 8.18.0 verified, no admitted obligations or axioms, 14/14 published fixtures agree with the formal decisions.</p>
+    <p><code>README.md</code> is a five-minute entry point. <code>NON_CLAIMS.md</code> is load-bearing and binding. Related work on defeasible reasoning — Pollock, AGM, Prakken, Sartor, truth maintenance — is acknowledged as owed and not yet written.</p>
+  </footer>
+
+</div>
+</body>
+</html>
